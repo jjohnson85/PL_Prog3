@@ -10,8 +10,8 @@
 #include "ompPrime.h"
 #include "sequentialPrime.h"
 
-#ifdef CUDAPRIME
-#include "cudaPrime.cu"
+#ifdef _CUDA_PRIME
+#include "cudaPrime.cuh"
 #endif
 
 using namespace std;
@@ -27,10 +27,12 @@ int main( int argc, char** argv )
     }
     
     map<string, primesFunction> tests;
+    
     tests[SEQUENTIAL_NAME] = runSequential;
     tests["Omp"] = runOmp;
     tests["Async"] = runAsync;
-#ifdef CUDAPRIME
+    
+#ifdef _CUDA_PRIME
     tests["Cuda"] = runCuda;
 #endif
     
