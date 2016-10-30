@@ -69,7 +69,7 @@ int cudaPrimalityTest( unsigned int start, unsigned int end )
 	}
 	cout << count << endl;
 
-	cudaFree( result );
+	cudaFree( d_result );
 	free( result );
 	return count;
 }
