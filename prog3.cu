@@ -1,4 +1,5 @@
 #include<iostream>
+#include<chrono>
 
 using namepace std;
 
@@ -38,7 +39,22 @@ int runSequential( unsigned int start, unsigned int end )
 
 int main( int argc, char** argv )
 {
+    chrono:time_point<chrono:sytem_clock> start, end;
 
+    if( argc > 3 )
+    {
+        cout << "Usage for this program is: primes [start] [end]" << endl;
+        cout << "Example: primes 10000001 10001000" << endl;
+        return -1;
+    }
+
+    //Run sequential test
+    start = chrono::system_clock::now();
+    runSequential(  argv[1] , argv[2] );
+    end = chrono::system_clock::now( );
+
+    cout << start - end << endl;   
+        
+    return 0;
 }
-
 
