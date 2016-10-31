@@ -10,11 +10,11 @@ CC=g++
 NVCC=nvcc
 
 #-----------------------------------------------------------------------
-CFLAGS = -Wall -fopenmp -lm -std=c++11
+CFLAGS = -Wall -std=c++11 -fopenmp
 CXXFLAGS = $(CFLAGS)
 CUDAFLAGS = -std=c++11
 
-LIBS = -lcudart
+LIBS = -lcudart -lm -fopenmp
 LIBDIRS = -L/usr/local/cuda/lib64
 #-----------------------------------------------------------------------
 # Specific targets:
@@ -25,14 +25,14 @@ LIBDIRS = -L/usr/local/cuda/lib64
 all:    cuda
 
 cudaPrime.o: cudaPrime.cu
-	$(NVCC) $(CUDAFLAGS) -c cudaPrime.cu
+	$(NVCC) $(CUDAFLAGS) -c $^
     
 cuda: CXXFLAGS += -D_CUDA_PRIME 
-cuda: sequentialPrime.o ompPrime.o asyncPrime.o cudaPrime.o functions.o main.o 
-	$(CC) -o primes $^ $(CXXFLAGS) $(LIBDIRS) $(LIBS)
+cuda: main.o sequentialPrime.o ompPrime.o asyncPrime.o cudaPrime.o functions.o
+	$(CC) -o primes $^ $(LIBDIRS) $(LIBS)
 
-nocuda:	sequentialPrime.o ompPrime.o asyncPrime.o functions.o main.o
-	$(CC) -o primes $^ $(CXXFLAGS)
+nocuda:	main.o sequentialPrime.o ompPrime.o asyncPrime.o functions.o
+	$(CC) -o primes $^
 
 clean:
 	rm -f *.o *~ *.wrd *.csv *.data .nfs* primes

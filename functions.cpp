@@ -54,15 +54,21 @@ void getPrimeTimings(map<string, primesFunction>& tests, ull start, ull end, map
 void outputData(std::map<std::string, primesFunction>& tests, std::map<string, double>& times, std::map<string, ull>& primes)
 {
     int counter = 0;
-    int dataWidth = 20;
+    int dataWidth = 25;
     double seqTime = times[SEQUENTIAL_NAME];
     int precision = 3;
     
     cout << left << setw(dataWidth) << "Algorithm" << right << setw(dataWidth) << "nprimes" << setw(dataWidth) << "time(sec)" << setw(dataWidth) << "speedup" << endl;
     cout << string(dataWidth * 4, '-') << endl;
+    
+    cout << left << setw(dataWidth) << SEQUENTIAL_NAME << right << setw(dataWidth) << primes[SEQUENTIAL_NAME] << setw(dataWidth) << fixed << setprecision(precision) << times[SEQUENTIAL_NAME] << setw(dataWidth) << seqTime/times[SEQUENTIAL_NAME] << endl;
+
     for(auto t : tests)
     {
-        cout << left << setw(dataWidth) << t.first << right << setw(dataWidth) << primes[t.first] << setw(dataWidth) << fixed << setprecision(precision) << times[t.first] << setw(dataWidth) << seqTime/times[t.first] << endl;
+        if(t.first != SEQUENTIAL_NAME)
+        {
+            cout << left << setw(dataWidth) << t.first << right << setw(dataWidth) << primes[t.first] << setw(dataWidth) << fixed << setprecision(precision) << times[t.first] << setw(dataWidth) << seqTime/times[t.first] << endl;
+        }
         counter++;
     }
 }

@@ -28,12 +28,24 @@ int main( int argc, char** argv )
     
     map<string, primesFunction> tests;
     
+    using namespace placeholders;
     tests[SEQUENTIAL_NAME] = runSequential;
-    tests["Omp"] = runOmp;
-    tests["Async"] = runAsync;
+    tests["Omp (Static, 1)"] = bind(runOmpStatic, _1, _2, 1);
+    tests["Omp (Static, 10)"] = bind(runOmpStatic, _1, _2, 10);
+    tests["Omp (Dynamic, 1)"] = bind(runOmpDynamic, _1, _2, 1);
+    tests["Omp (Dynamic, 10)"] = bind(runOmpDynamic, _1, _2, 10);
+    tests["std::Async"] = runAsync;
     
 #ifdef _CUDA_PRIME
-    tests["Cuda"] = runCuda;
+    tests["Cuda - Coarse: 1 warp"] = bind(runCudaCoarse, _1, _2, 1);
+    tests["Cuda - Fine: 1 warp"] = bind(runCudaFine, _1, _2, 1);
+    tests["Cuda - Hybrid: 1 warp"] = bind(runCudaHybrid, _1, _2, 1);
+    tests["Cuda - Coarse: 16 warps"] = bind(runCudaCoarse, _1, _2, 16);
+    tests["Cuda - Fine: 16 warps"] = bind(runCudaFine, _1, _2, 16);
+    tests["Cuda - Hybrid: 16 warps"] = bind(runCudaHybrid, _1, _2, 16);
+    tests["Cuda - Coarse: 32 warps"] = bind(runCudaCoarse, _1, _2, 32);
+    tests["Cuda - Fine: 32 warps"] = bind(runCudaFine, _1, _2, 32);
+    tests["Cuda - Hybrid: 32 warps"] = bind(runCudaHybrid, _1, _2, 32);
 #endif
     
     unsigned long long start, end, inc, iter;
