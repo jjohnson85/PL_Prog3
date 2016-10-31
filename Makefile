@@ -1,6 +1,6 @@
 # Makefile for CSC461 Program 3
 
-# Author: Andrew Stelter, Jared Thompson
+# Author: Andrew Stelter, Jared Johnson
 # Class:  CSC461 Programming Languages
 # Date:   Fall 2016
 
