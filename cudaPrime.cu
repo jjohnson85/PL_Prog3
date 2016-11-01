@@ -1,4 +1,4 @@
-
+#include<cstdio>
 #include<iostream>
 #include<cmath>
 
@@ -11,73 +11,154 @@
 using namespace std;
 
 //test for a numbers primality
-__global__ void isPrimeCoarse( ull offset, ull end, int * result )
+__global__ void isPrimeCoarse( ull offset, ull start, ull end, int * result )
 {
 	ull tid = threadIdx.x + blockIdx.x * blockDim.x;
-	ull test = tid + offset;
+	ull idx = tid + offset;
+	ull val = tid + start;
 
-    bool prime = true;
-    if(test <= end)
+    int prime = 1;
+    if(val <= end)
     {
-	    if( test < 2 )
+	    if( val < 2 )
 	    {
-		    prime = false;
-		    result[tid] = false;
+		    prime = 0;
 	    }
         else
         {
-	        for( int i = 2; i < test / 2; i++ )
+	        for( int i = 2; i < val / 2; i++ )
 	        {
-		        if( test % i == 0 )
+		        if( val % i == 0 )
 		        {
-			        prime = false;
+			        prime = 0;
 		        }
 	        }
-            
-	        result[test] = prime;
 	    }
+	    
+        result[idx] = prime;
 	}
+}
+
+//test for a numbers primality
+__global__ void isPrimeFine( ull offset, ull start, ull end, int * result )
+{
+
+}
+
+//test for a numbers primality
+__global__ void isPrimeHybrid( ull offset, ull start, ull end, int * result )
+{
+
+}
+
+__global__ void reduce( int * data, ull size, ull gapSize )
+{
+    ull tid = threadIdx.x + blockIdx.x * blockDim.x;
+    ull idx = tid*gapSize;
+    ull offset = 16*gapSize;
+    
+    if(idx < size)
+    {
+        //printf("Thread %lli writing to index %lli\n", tid, idx);
+        while(offset >= gapSize)
+        {
+            //printf("Offset %lli : %lli -> %lli\n", offset, idx, idx+offset);
+            if(idx+offset < size)
+            {
+                //printf("Thread %lli adding index %lli: %i\n", tid, idx+offset, data[idx+offset]);
+                data[idx] += data[idx+offset];
+            }
+            offset >>= 1;
+        }
+    }
+}
+
+ull sumRange(int * data, ull size, int warps)
+{
+    cudaDeviceSynchronize();
+    
+    //cout << "\nStarting cuda range sum on " << size << " items" << endl;
+
+    int result;
+	ull threadsPer = WARPSIZE*warps;
+	
+    bool more=false;
+    ull threadRange = 1;
+    ull threadsNeeded = (ull)(ceil((double)size/threadRange)+0.2);
+    ull warpsNeeded = (ull)(ceil((double)threadsNeeded/WARPSIZE)+0.2);
+	ull blocksNeeded = (ull)(ceil((double)warpsNeeded/warps)+0.2);
+	ull blocks;
+	ull blocksDone = 0;
+	
+    do
+    {
+        //We'll need to reduce down to running
+        //In a single warp
+        more = warpsNeeded > 1;
+        //cout << "Iteration " << count++ << endl;
+        
+        while(blocksDone < blocksNeeded)
+        {
+            //cout << blocksDone << "/" << blocksNeeded << " blocks" << endl;
+            //Check if everything can be summed in one go, or if 
+            //Multiple kernel calls needed
+            if(blocksNeeded < MAXBLOCKS) blocks = blocksNeeded;
+            else
+            {
+                blocks = MAXBLOCKS;
+            }
+            
+            //cout << "Executing " << blocks << " blocks with " << threadsPer << " each" << endl;
+            //cout << "Start is data[" << blocksDone*threadsPer << "], Size is " << size-blocksDone*threadsPer << " range is " << threadRange << endl;
+            reduce<<<blocks, threadsPer>>>(data+blocksDone*threadsPer, size-blocksDone*threadsPer, threadRange);
+            cudaDeviceSynchronize();
+            blocksDone += blocks;
+        }
+        threadRange = WARPSIZE*threadRange;
+        threadsNeeded = (ull)(ceil((double)size/threadRange)+0.2);
+        warpsNeeded = (ull)(ceil((double)threadsNeeded/WARPSIZE)+0.2);
+	    blocksNeeded = (ull)(ceil((double)warpsNeeded/warps)+0.2);
+        blocksDone = 0;
+    }while(more);
+
+    cudaMemcpy(&result, data, sizeof(int), cudaMemcpyDeviceToHost);
+    return result;
 }
 
 int runCudaCoarse( ull start, ull end, unsigned int warps )
 {
-	ull range = end-start;
+	ull range = end-start+1;
 	ull size = (range)*sizeof(int);
 	ull threadsPer = warps*WARPSIZE;
 	int count = 0;
 	if(threadsPer > MAXTHREADS) threadsPer = MAXTHREADS;
 	
-	ull totalBlocks = (int)(ceil((double)range/threadsPer)+0.2);
+	ull totalBlocks = (ull)(ceil((double)range/threadsPer)+0.2);
 
 	int *result = (int *)malloc( size );
 	int *d_result;
-	cudaMalloc( (int**)&d_result, size );
+	cudaMalloc( &d_result, size );
 
-    ull threadsThisTime, offset=start;
+    ull threadsThisTime;
+    ull totalDone=0;
     int blocks;
-	while(offset <= end)
+	while(totalDone < range)
 	{
 	    threadsThisTime = MAXBLOCKS*threadsPer;
-	    if(offset+threadsThisTime > end) threadsThisTime = end-offset+1;
-	    blocks = (int)(ceil(threadsThisTime/(double)threadsPer)+0.2);
+	    if(start+threadsThisTime > end) threadsThisTime = end-start+1;
+	    blocks = (ull)(ceil(threadsThisTime/(double)threadsPer)+0.2);
 
-		isPrimeCoarse<<< blocks , threadsPer >>>( offset, end, d_result ); 
-		
-		offset += blocks*threadsPer;
+		isPrimeCoarse<<< blocks , threadsPer >>>( totalDone, start, end, d_result ); 
+		    
+		start += threadsThisTime;
+		totalDone += threadsThisTime;
 	}
 
-	cudaMemcpy( result, d_result, size, cudaMemcpyDeviceToHost );
-
-	for( int i = 0; i < range; i++ )
-	{
-		if( result[i] == true )
-		{
-			count++;
-		}
-	}
+    count = sumRange(d_result, range, warps);
 
 	cudaFree( d_result );
 	free( result );
+	
 	return count;
 }
 

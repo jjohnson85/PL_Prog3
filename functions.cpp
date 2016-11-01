@@ -42,12 +42,9 @@ void getPrimeTimings(map<string, primesFunction>& tests, ull start, ull end, map
     times.clear();
     primes.clear();
     
-    int i = 0;
     for(auto t : tests)
     {
         times[t.first] = timePrimesFunction(t.second, start, end, primes[t.first]);
-
-        i++;
     }
 }
 
