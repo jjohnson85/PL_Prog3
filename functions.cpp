@@ -5,8 +5,12 @@
 #include <iostream>
 #include <iomanip>
 #include <omp.h>
-
 #include "functions.h"
+
+#ifdef _CUDA_PRIME
+#include "cudaPrime.cuh"
+#endif
+
 
 using namespace std;
 
@@ -48,6 +52,16 @@ void getPrimeTimings(map<string, primesFunction>& tests, ull start, ull end, map
     }
 }
 
+void outputDataHeader()
+{
+/*prime benchmark, run Tue Oct 25 11:33:43 2016
+CPU: 8 hardware threads
+GPGPU: GeForce GTX 960, CUDA 5.2, 4095 Mbytes global memory, 1024 CUDA cores*/
+#ifdef _CUDA_PRIME
+    cout << "GPGPU: " << getCudaDeviceProperties() << endl;
+#endif
+}
+
 void outputData(std::map<std::string, primesFunction>& tests, std::map<string, double>& times, std::map<string, ull>& primes)
 {
     int counter = 0;
@@ -70,37 +84,24 @@ void outputData(std::map<std::string, primesFunction>& tests, std::map<string, d
     }
 }
 
-void findNumPrimes(map<string, primesFunction>& tests, ull start, ull end)
+void findNumPrimes(map<string, primesFunction>& tests, ull start, ull end, map<string, double>& times, map<string, ull>& primes)
 {
-    map<string, double> times;
-    map<string, ull> primes;
     getPrimeTimings(tests, start, end, times, primes);
-    
-    outputData(tests, times, primes);
 }
 
-void getTimeStats(map<string, primesFunction>& tests, ull start, ull end, ull increment, ull iterations)
+void getTimeAvg(map<string, primesFunction>& tests, ull start, ull end, ull iterations, map<string, double>& avgs, map<string, ull>& primes)
 {
-
     map<string, double> times;
-    map<string, ull> primes;
-    
-    int count = 0;
-    for(ull i=start; i<=end; i+=increment, count++)
-    {
-        map<string, double> avgs;
-        for(ull j=0; j<iterations; j++)
-        {
-            getPrimeTimings(tests, start, i, times, primes);
-            for(auto t : tests)
-                avgs[t.first]+=times[t.first];
-        }
-        for(auto t : tests)
-            avgs[t.first]/=iterations;
-            
-        cout << "[" << start << ", " << i << "]" << endl;
-        outputData(tests, avgs, primes);
+    for(auto t : tests)
+        avgs[t.first] = 0;
         
-        cout << endl;
+    for(ull i=0; i<iterations; i++)
+    {
+        getPrimeTimings(tests, start, end, times, primes);
+        for(auto t : tests)
+            avgs[t.first] += times[t.first];
     }
+    
+    for(auto t : tests)
+        avgs[t.first] /= iterations;
 }

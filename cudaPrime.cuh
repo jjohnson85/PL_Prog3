@@ -3,6 +3,7 @@
 
 typedef unsigned long long ull;
 
-int runCudaCoarse( unsigned long long start, unsigned long long end, unsigned int warps );
-int runCudaFine( unsigned long long start, unsigned long long end, unsigned int warps );
-int runCudaHybrid( unsigned long long start, unsigned long long end, unsigned int warps );
+int runCudaCoarse( ull start, ull end, unsigned int warps );
+int runCudaFine( ull start, ull end, unsigned int warps );
+int runCudaHybrid( ull start, ull end, unsigned int warps );
+std::string getCudaDeviceProperties();

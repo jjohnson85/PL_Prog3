@@ -18,11 +18,13 @@ using namespace std;
 
 int main( int argc, char** argv )
 {
-    if( argc != 3 && argc != 5 )
+    if( argc < 3 || argc > 5 )
     {
         cout << "Usages: " << endl;
-        cout << "primes start end [increment iterations]\n\tFind the number of primes between start and end. If increment and iterations are given, the program will run through every multiple of increment between start and end the number of times defined by iterations and output the average timings" << endl;
-        cout << "Examples:\n\tprimes 10000001 10001000\n\tprimes 0 1000 10 1000" << endl;
+        cout << "primes start end [iterations] [increment]\n\tFind the number of primes between start and end. If increment and iterations are given, the program will run through every multiple of increment between start and end the number of times defined by iterations and output the average timings" << endl;
+        cout << "Examples:\n\tprimes 0 1000 -- Find the number of primes between 0 and 1000\n\t" <<
+        "primes 0 1000 100 -- Find the number of primes between 0 and 1000, 100 times, and average the times taken\n\t" <<
+        "primes 0 1000 100 10 -- Find the number of primes between 0 and 10, then 0 and 20... up to 0 and 1000, doing each range 100 times and averaging the times" << endl;
         return -1;
     }
     
@@ -51,15 +53,33 @@ int main( int argc, char** argv )
     unsigned long long start, end, inc, iter;
     start = strtoull(argv[1], NULL, 10);
     end = strtoull(argv[2], NULL, 10);
+    if(argc > 3)
+        iter = strtoull(argv[3], NULL, 10);
+    if(argc > 4)
+        inc = strtoull(argv[4], NULL, 10);
+        
+    outputDataHeader();
+    map<string, double> times;
+    map<string, ull> primes;
     if(argc == 3)
     {
-        findNumPrimes(tests, start, end);
+        findNumPrimes(tests, start, end, times, primes);
+        outputData(tests, times, primes);
+    }
+    else if(argc == 4)
+    {
+        getTimeAvg(tests, start, end, iter, times, primes);
+        outputData(tests, times, primes);
     }
     else
     {
-        inc = strtoull(argv[3], NULL, 10);
-        iter = strtoull(argv[4], NULL, 10);
-        getTimeStats(tests, start, end, inc, iter);
+        for(ull i=start; i<=end; i+= inc)
+        {
+            getTimeAvg(tests, start, i, iter, times, primes);
+            cout << "Range: [" << start << ", " << i << "]" << endl;
+            outputData(tests, times, primes);
+            cout << endl;
+        }
     }
         
     return 0;

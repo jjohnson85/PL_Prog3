@@ -14,8 +14,7 @@ CFLAGS = -Wall -std=c++11 -fopenmp
 CXXFLAGS = $(CFLAGS)
 CUDAFLAGS = -std=c++11
 
-LIBS = -lcudart -lm -fopenmp
-LIBDIRS = -L/usr/local/cuda/lib64
+LIBS = -lm -fopenmp
 #-----------------------------------------------------------------------
 # Specific targets:
 
@@ -29,7 +28,7 @@ cudaPrime.o: cudaPrime.cu
     
 cuda: CXXFLAGS += -D_CUDA_PRIME 
 cuda: main.o sequentialPrime.o ompPrime.o asyncPrime.o cudaPrime.o functions.o
-	$(CC) -o primes $^ $(LIBDIRS) $(LIBS)
+	$(NVCC) -o primes $^ -Xcompiler "$(LIBS)"
 
 nocuda:	main.o sequentialPrime.o ompPrime.o asyncPrime.o functions.o
 	$(CC) -o primes $^
