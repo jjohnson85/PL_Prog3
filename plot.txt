@@ -1,0 +1,1 @@
+plot for [i=2:14+1] 'graph.dat' u 1:i w lp title columnheader(i)

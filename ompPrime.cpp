@@ -1,6 +1,9 @@
 #include "ompPrime.h"
 #include "functions.h"
 #include <omp.h>
+#include <iostream>
+
+using namespace std;
 
 int runOmpStatic( ull start, ull end, ull work )
 {

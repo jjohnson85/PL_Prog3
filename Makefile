@@ -31,7 +31,13 @@ cuda: main.o sequentialPrime.o ompPrime.o asyncPrime.o cudaPrime.o functions.o
 	$(NVCC) -o primes $^ -Xcompiler "$(LIBS)"
 
 nocuda:	main.o sequentialPrime.o ompPrime.o asyncPrime.o functions.o
-	$(CC) -o primes $^
+	$(CC) -o primes $^ $(LIBS)
+
+cudaGraph: CXXFLAGS += -DGRAPHDATA
+cudaGraph: cuda
+
+nocudaGraph: CXXFLAGS += -DGRAPHDATA
+nocudaGraph: nocuda
 
 clean:
 	rm -f *.o *~ *.wrd *.csv *.data .nfs* primes
