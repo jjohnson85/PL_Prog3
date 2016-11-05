@@ -1,7 +1,21 @@
 #include "sequentialPrime.h"
 #include "functions.h"
 
-int runSequential( unsigned int start, unsigned int end )
+/*
+ * runSequential
+ *
+ * Finds the number of primes in a range. Each number
+ * in the range is checked for primality using the isprime
+ * function.
+ *
+ * @params
+ *      [in] start - The start of the range to check
+ *      [in] end - The end of the range to check
+ *
+ * @returns
+ *      int - The number of primes in the range [start, end]
+ */
+int runSequential( ull start, ull end )
 {
     int count = 0;
 

@@ -165,7 +165,7 @@ void outputData(ostream& out, std::map<std::string, primesFunction>& tests, std:
 //Always output the sequential information first
 #ifndef GRAPHDATA    
     out << left << setw(nameWidth) << "Algorithm" << right << setw(dataWidth) << "nprimes" << setw(dataWidth) << "time(sec)" << setw(dataWidth) << "speedup" << endl;
-    out << string(dataWidth * 4, '-') << endl;
+    out << string(dataWidth * 3+nameWidth, '-') << endl;
 
     out << left << setw(nameWidth) << SEQUENTIAL_NAME << right << setw(dataWidth) << primes[SEQUENTIAL_NAME] << setw(dataWidth) << fixed << setprecision(precision) << times[SEQUENTIAL_NAME] << setw(dataWidth) << seqTime/times[SEQUENTIAL_NAME] << endl;
 #else

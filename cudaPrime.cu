@@ -10,22 +10,42 @@
 
 using namespace std;
 
-//test for a numbers primality
-__global__ void isPrimeCoarse( ull offset, ull start, ull end, int* result )
+/*
+ * isPrimeCoarse
+ * 
+ * Goarse-grained GPGPU kernel for finding
+ * prime numbers. Each thread takes a number
+ * in the range and checks if it is prime 
+ * by dividing by all numbers up to n/2
+ *
+ * @params
+ *      [in] start - The bottom of the range to find primes in
+ *      [in] end - The top of the range to find primes in
+ *      [out] result - Int array for storing results
+ *          Result values which are set to 1 represent the
+ *          associated value being non-prime
+ */
+__global__ void isPrimeCoarse( ull start, ull end, int* result )
 {
+    //Find thread id
 	ull tid = threadIdx.x + blockIdx.x * blockDim.x;
-	ull idx = tid + offset;
-	ull val = tid + start;
+	
+    //Find value to check
+    ull val = tid + start;
 
+    //Value is by default prime
     char prime = 0;
     if(val <= end)
     {
+        //Values < 2 are non prime
 	    if( val < 2 )
 	    {
 		    prime = 1;
 	    }
         else
         {
+            //Otherwise, check if any number
+            //up to n/2 divides n
 	        for( ull i = 2; i < val / 2; i++ )
 	        {
 		        if( val % i == 0 )
@@ -34,79 +54,189 @@ __global__ void isPrimeCoarse( ull offset, ull start, ull end, int* result )
 		        }
 	        }
 	    }
-	    
-        result[idx] = prime;
+        //Store the result in the array
+        result[tid] = prime;
 	}
 }
 
-//test for a numbers primality
+/*
+ * isPrimeFine
+ *
+ * Fine-grained GPGPU kernel for finding
+ * prime numbers. Each thread checks if one
+ * specific number divides the input. 
+ *
+ * @params
+ *      [in] val - The value to check for primality
+ *      [in] offset - The amount to add to the threadid
+            to find the number to divide val by
+ *      [out] result - Int pointer associated with val
+ *          NOTE - The kernel assumes this value is 0,
+ *              and it is set to 1 if any thread finds
+ *              a number which divides val
+ */
 __global__ void isPrimeFine( ull val, ull offset, int * result )
 {
+    //Assume the value is prime
     bool prime = true;
+
+    //Find the value to divide by
+    //The extra +2 is to not divide by 0 or 1
     ull tid = threadIdx.x + blockIdx.x * blockDim.x + offset + 2;
 
+    //Non prime if < 2
     if(val < 2)
     {
-        if(tid == 2) *result = 1;
+        if(tid == 2) prime = false;
     }
     else if(tid < val/2)
     {
+        //Check if the value the thread has divides val
         if(val % tid == 0)
         {
             prime = false;
         }
-    
-        if(!prime) *result = 1;
     }
+    //Merge all the results of each warp
+    //If any found non-prime, set prime to not-prime
+    prime = !__any(!prime);
+
+    //Every first thread in its warp sets
+    //the result pointer if it's warp found
+    //val to be non-prime. This is to cut down
+    //on memory accesses
+    if(threadIdx.x%32==0 && !prime)*result = 1;
 }
 
-//test for a numbers primality
-__global__ void isPrimeHybrid( ull store_offset, ull val_offset, int * result )
+/*
+ * isPrimeHybrid
+ *
+ * A cross between the fine and coarse grained approaches
+ * above. Each block takes a number to check for primality
+ * and each thread in the block checks a couple of numbers
+ * to see if any divide the target number
+ *
+ * @params
+ *      [in] val_offset - Offset to add to the blockId
+ *          to get the value being tested for primality
+ *      [out] result - Int array for storing results
+ *          NOTE - The kernel assumes this array is zeroed,
+ *              and sets values to 1 if the associated number
+ *              is NOT prime
+ */
+__global__ void isPrimeHybrid( ull val_offset, int * result )
 {
+    //Find thread id, +2 to skip testing 0 and 1
     ull tid = threadIdx.x+2;
+
+    //Find the value to be tested for primality
     ull val = blockIdx.x + val_offset;
-    ull idx = blockIdx.x + store_offset;
-    ull lim = val/2;
+
+    //Find the limit to iterate up to (val/2)
+    ull lim = val>>1;
+
+    //Assume the value is prime
     bool prime = true;
-    
+
+    //if < 2, not prime
     if(val < 2)
     {
-        if(tid == 2)result[idx] = 1;
+        prime = false;
     }
     else
     {
+        //Check multiples of blockDim offset by
+        //the thread id to see if any divide the target
         for(ull i=tid; i<lim; i+=blockDim.x)
         {
             if(val % i == 0) prime = false;
         }
-
-        if(!prime) result[idx] = 1;
     }
+    //Merge all results for the warp
+    //If any thread in the warp found a divisor
+    //Set prime to be false
+    prime = !__any(!prime);
+
+    //Every first thread in the warp sets the result
+    //Value associated with the blockId to be 1 if any
+    //any thread in its warp found a divisor
+    if(threadIdx.x%32==0 && !prime) result[blockIdx.x] = 1;
 }
 
+/*
+ * reduce
+ *
+ * GPGPU kernel for summing the values in an array
+ * in O(lg(n)) time. (The exact time function is 
+ * 5*log32(n))
+ *
+ * @params
+ *      [in] data - Pointer to the data to be summed
+ *          this data will be modified by the reduction
+ *      [in] size - The amount of data to be summed
+ *      [in] gapSize - How far apart the data to be
+ *          summed sits. The first iteration will be 1,
+ *          the second will be 32 and so on
+ */
 __global__ void reduce( int * data, ull size, ull gapSize )
 {
+    //Find the thread id
     ull tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    //Find the index to write to
     ull idx = tid*gapSize;
+
+    //Find the first index to read from
     ull offset = 16*gapSize;
     
     if(idx < size)
     {
-        //printf("Thread %lli writing to index %lli\n", tid, idx);
-        while(offset >= gapSize)
-        {
-            //printf("Offset %lli : %lli -> %lli\n", offset, idx, idx+offset);
-            if(idx+offset < size)
-            {
-                //if(data[idx+offset] > 10000)
-                //printf("Thread %lli adding index %lli: %i\n", tid, idx+offset, data[idx+offset]);
-                data[idx] += data[idx+offset];
-            }
-            offset >>= 1;
-        }
+        //Add the values 16, 8, 4, 2, and 1 above       
+        //Unrolled loop for efficiency
+        //This works because all threads in the warp
+        //Execute in lock-step
+
+        //+16
+        if(idx+offset < size)              
+            data[idx] += data[idx+offset];
+        offset >>= 1;
+        
+        //+8
+        if(idx+offset < size)
+            data[idx] += data[idx+offset];
+        offset >>= 1;
+        
+        //+4
+        if(idx+offset < size)
+            data[idx] += data[idx+offset];
+        offset >>= 1;
+        
+        //+2
+        if(idx+offset < size)
+            data[idx] += data[idx+offset];
+        offset >>= 1;
+        
+        //+1
+        if(idx+offset < size)
+            data[idx] += data[idx+offset];
+        offset >>= 1;
+
     }
 }
 
+/*
+ * getCudaDeviceProperties
+ *
+ * Returns a string with specific information
+ * about the cuda device number 0.
+ * Information includes:
+ *      Version info
+ *      Global memory
+ *      # CUDA cores
+ *
+ * @returns
+ *      string of text
+ */
 string getCudaDeviceProperties()
 {
     char out[500];
@@ -119,6 +249,21 @@ string getCudaDeviceProperties()
     return out;
 }
 
+/*
+ * sumRange
+ *
+ * Uses the reduce kernel to sum the values
+ * in a range
+ *
+ * @params
+ *      [in] data - Pointer on device to data to sum
+ *         NOTE - This data will be modified 
+ *      [in] size - The number of items to sum
+ *      [in] warps - The number of warps per block to use
+ *
+ * @returns
+ *      unsigned long long - The sum of the elements of the array
+ */
 ull sumRange(int* data, ull size, int warps)
 {   
     //cout << "\nStarting cuda range sum on " << size << " items" << endl;
@@ -127,7 +272,11 @@ ull sumRange(int* data, ull size, int warps)
 	ull threadsPer = WARPSIZE*warps;
 	
     bool more=false;
+    
+    //Amount of values each thread owns
     ull threadRange = 1;
+    
+    //Calculate the number of blocks needed to complete
     ull threadsNeeded = (ull)(ceil((double)size/threadRange)+0.2);
     ull warpsNeeded = (ull)(ceil((double)threadsNeeded/WARPSIZE)+0.2);
 	ull blocksNeeded = (ull)(ceil((double)warpsNeeded/warps)+0.2);
@@ -142,6 +291,7 @@ ull sumRange(int* data, ull size, int warps)
         more = warpsNeeded > 1;
         //cout << "Iteration " << count++ << endl;
         
+        //Run as many blocks as needed for each iteration
         while(blocksDone < blocksNeeded)
         {
             //cout << blocksDone << "/" << blocksNeeded << " blocks" << endl;
@@ -155,24 +305,34 @@ ull sumRange(int* data, ull size, int warps)
             
             //cout << "Executing " << blocks << " blocks with " << threadsPer << " each" << endl;
             //cout << "Start is data[" << blocksDone*threadsPer << "], Size is " << size-blocksDone*threadsPer << " range is " << threadRange << endl;
+            
+            //Queues a reduce kernel
             reduce<<<blocks, threadsPer>>>(data+blocksDone*threadsPer, size-blocksDone*threadsPer, threadRange);
             blocksDone += blocks;
         }
+        //Calculate how many blocks are needed for the next iteration
         threadRange = WARPSIZE*threadRange;
         threadsNeeded = (ull)(ceil((double)size/threadRange)+0.2);
         warpsNeeded = (ull)(ceil((double)threadsNeeded/WARPSIZE)+0.2);
 	    blocksNeeded = (ull)(ceil((double)warpsNeeded/warps)+0.2);
         blocksDone = 0;
         
+        //Synchronize; we need all queued reduction kernels to finish
+        //Before the next iteration
         cudaDeviceSynchronize();
+
+        //Exit if there was an error
         lastError = cudaPeekAtLastError();
         if(lastError != cudaSuccess)
         {
             cout << "sumRange::Error during kernel execution: " << cudaGetErrorString(lastError) << endl;
             return 0;
         }
+
+    //Repeat until we get down to 1 kernel
     }while(more);
 
+    //Copy the item at result[0] and return it
     cudaMemcpy(&result, data, sizeof(int), cudaMemcpyDeviceToHost);
     return result;
 }
@@ -206,7 +366,7 @@ int runCudaCoarse( ull start, ull end, unsigned int warps )
 	    blocks = (ull)(ceil(threadsThisTime/(double)threadsPer)+0.2);
 
         //cout << "IsPrimeCoarse<<<" << blocks << ", " << threadsPer << ">>>(" << totalDone << ", " << start << ", " << end << ", " << d_result << ")" << endl;
-		isPrimeCoarse<<< blocks , threadsPer >>>( totalDone, start, end, d_result ); 
+		isPrimeCoarse<<< blocks , threadsPer >>>( start, end, d_result+totalDone ); 
 		    
 		start += threadsThisTime;
 		totalDone += threadsThisTime;
@@ -304,7 +464,7 @@ int runCudaHybrid( ull start, ull end, unsigned int warps )
         if(blocks > MAXBLOCKS) blocks = MAXBLOCKS;
         
         //cout << "IsPrimeHybrid<<<" << blocks << ", " << threadsPer << ">>>(" << j << ", " << i << ", " << d_result << ")" << endl;
-        isPrimeHybrid<<<blocks, threadsPer>>>(j, i, d_result);
+        isPrimeHybrid<<<blocks, threadsPer>>>( i, d_result+j);
     }
 
     cudaDeviceSynchronize();

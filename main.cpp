@@ -149,8 +149,10 @@ int main( int argc, char** argv )
         inc = strtoull(argv[4], NULL, 10);
     
     //Output the data header
+    cout << endl;
     outputDataHeader(cout);
-    
+    cout << endl;
+   
     //If GRAPHDATA defined, output headers in a format
     //which is easy to import into excel
 #ifdef GRAPHDATA

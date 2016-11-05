@@ -11,8 +11,8 @@
 #include <vector>
 #include <iostream>
 
-typedef std::function<int(unsigned int, unsigned int)> primesFunction;
 typedef unsigned long long ull;
+typedef std::function<int(ull, ull)> primesFunction;
 
 double timePrimesFunction(primesFunction primeFunc, ull start, ull end, ull& primes);
 bool isPrime( ull x );
