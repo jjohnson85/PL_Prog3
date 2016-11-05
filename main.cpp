@@ -156,7 +156,7 @@ int main( int argc, char** argv )
     //If GRAPHDATA defined, output headers in a format
     //which is easy to import into excel
 #ifdef GRAPHDATA
-    cout << "\"" << SEQUENTIAL_NAME << "\" ";
+    cout << "\"Range\" \"" << SEQUENTIAL_NAME << "\" ";
     for(auto i : tests)
         if(i.first != SEQUENTIAL_NAME)
             cout << "\"" << i.first << "\" ";
