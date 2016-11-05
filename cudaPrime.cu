@@ -46,7 +46,7 @@ __global__ void isPrimeCoarse( ull start, ull end, int* result )
         {
             //Otherwise, check if any number
             //up to n/2 divides n
-	        for( ull i = 2; i < val / 2; i++ )
+	        for( ull i = 2; i <= val / 2; i++ )
 	        {
 		        if( val % i == 0 )
 		        {
@@ -89,7 +89,7 @@ __global__ void isPrimeFine( ull val, ull offset, int * result )
     {
         if(tid == 2) prime = false;
     }
-    else if(tid < val/2)
+    else if(tid <= val/2)
     {
         //Check if the value the thread has divides val
         if(val % tid == 0)
@@ -147,7 +147,7 @@ __global__ void isPrimeHybrid( ull val_offset, int * result )
     {
         //Check multiples of blockDim offset by
         //the thread id to see if any divide the target
-        for(ull i=tid; i<lim; i+=blockDim.x)
+        for(ull i=tid; i<=lim; i+=blockDim.x)
         {
             if(val % i == 0) prime = false;
         }
@@ -337,16 +337,35 @@ ull sumRange(int* data, ull size, int warps)
     return result;
 }
 
+/*
+ * runCudaCoarse
+ *
+ * Uses the isPrimeCoarse kernel to find the number
+ * of primes in a range. Every thread checks to find the 
+ * primality of a specific number.
+ *
+ * @params
+ *      [in] start - The beginning of the range to check
+ *      [in] end - The end of the range to check
+ *      [in] warps - The number of warps per block to use
+ *
+ * @returns
+ *      unsigned long long - The number of primes in the range [start, end]
+ */
 int runCudaCoarse( ull start, ull end, unsigned int warps )
 {
 	ull range = end-start+1;
 	ull size = (range)*sizeof(int);
+	
+	//Make sure the call didn't specify more threads per block than allowed
 	ull threadsPer = warps*WARPSIZE;
 	if(threadsPer > MAXTHREADS) threadsPer = MAXTHREADS;
 	
+	//Calculate the total number of blocks needed
 	ull totalBlocks = (ull)(ceil((double)range/threadsPer)+0.2);
 	cudaError_t lastError;
 	
+	//Allocate memory, check for a failure
 	int *d_result;
 	if(cudaMalloc( &d_result, size )==cudaErrorMemoryAllocation)
 	{
@@ -354,25 +373,35 @@ int runCudaCoarse( ull start, ull end, unsigned int warps )
 	    return 0;
 	}
 	
+	//Set the memory to 0; non-primes will be set to 1
     cudaMemset(d_result, 0, size);
 	
     ull threadsThisTime;
     ull totalDone=0;
     ull blocks;
+    
+    //Do all of the numbers in the range
 	while(totalDone < range)
 	{
+	    //Do as many threads each iteration as possible
 	    threadsThisTime = MAXBLOCKS*threadsPer;
 	    if(start+threadsThisTime > end) threadsThisTime = end-start+1;
+	    
+	    //Calculate the number of blocks to use this call
 	    blocks = (ull)(ceil(threadsThisTime/(double)threadsPer)+0.2);
 
         //cout << "IsPrimeCoarse<<<" << blocks << ", " << threadsPer << ">>>(" << totalDone << ", " << start << ", " << end << ", " << d_result << ")" << endl;
 		isPrimeCoarse<<< blocks , threadsPer >>>( start, end, d_result+totalDone ); 
 		    
+	    //Increment offsets
 		start += threadsThisTime;
 		totalDone += threadsThisTime;
 	}
 
+    //Wait for all cuda kernels to end
     cudaDeviceSynchronize();
+    
+    //Make sure none of the kernels caused errors
     lastError = cudaPeekAtLastError();
     if(lastError != cudaSuccess)
     {
@@ -381,6 +410,7 @@ int runCudaCoarse( ull start, ull end, unsigned int warps )
         return 0;
     }
     
+    //Get the number of primes
     int count = range-sumRange(d_result, range, warps);
 
 	cudaFree( d_result );
@@ -388,21 +418,41 @@ int runCudaCoarse( ull start, ull end, unsigned int warps )
 	return count;
 }
 
+/*
+ * runCudaFine
+ *
+ * Uses the isPrimeFine kernel to find the number
+ * of primes in a range. Every thread in the kernel
+ * checks if a specific number is divisible by the threadid
+ *
+ * @params
+ *      [in] start - The beginning of the range to check
+ *      [in] end - The end of the range to check
+ *      [in] warps - The number of warps per block to use
+ *
+ * @returns
+ *      unsigned long long - The number of primes in the range [start, end]
+ */
 int runCudaFine( ull start, ull end, unsigned int warps )
 {
     ull range = end-start+1;
     ull size = (range)*sizeof(int);
     ull threadsPer = warps*WARPSIZE;
     
+    //Make sure the call doesn't specify more threads per block
+    //than allowed
     if(threadsPer > MAXTHREADS) threadsPer = MAXTHREADS;
 	cudaError_t lastError;
     	
+	//Allocate memory for result
     int* d_result;
 	if(cudaMalloc( &d_result, size )==cudaErrorMemoryAllocation)
 	{
 	    cout << "Error allocating memory on cuda device" << endl;
 	    return 0;
 	}
+	
+	//Set result to 0, non-primes will be set to 1
     cudaMemset(d_result, 0, size);
            
     ull blocks;
@@ -411,11 +461,17 @@ int runCudaFine( ull start, ull end, unsigned int warps )
     int* i = d_result;
     for(ull j=start; j<=end; i++, j++)
     {
+        //If the current value being tested is > the max number
+        //of threads for a CUDA launch, do multiple launches
+        
         //k - Offset from 0 for thread indices
         for(ull k=0; k<=j; k+= threadsPer*MAXBLOCKS)
         {
+            //Calculate how many blocks to launch
             blocks = (ull)(ceil((double)(j/2)/threadsPer)+0.2);
             if(blocks > MAXBLOCKS) blocks = MAXBLOCKS;
+            
+            //Special case for 0
             if(!blocks) blocks = 1;
 
             //cout << "IsPrimeFine<<<" << blocks << ", " << threadsPer << ">>>(" << j << ", " << k << ", " << i << ")" << endl;
@@ -423,7 +479,10 @@ int runCudaFine( ull start, ull end, unsigned int warps )
         }
     }
 
+    //Wait for all cuda kernels to end
     cudaDeviceSynchronize();
+    
+    //Check if any kernels caused errors
     lastError = cudaPeekAtLastError();
     if(lastError != cudaSuccess)
     {
@@ -433,6 +492,7 @@ int runCudaFine( ull start, ull end, unsigned int warps )
         return 0;
     }
     
+    //Get the number of primes
     int count = range-sumRange(d_result, range, warps);
     
     cudaFree( d_result );
@@ -440,34 +500,60 @@ int runCudaFine( ull start, ull end, unsigned int warps )
     return count;
 }
 
+/*
+ * runCudaHybrid
+ *
+ * Uses the isPrimeHybrid kernel to find the number
+ * of primes in a range. Every block checks if a different
+ * number is prime by having all threads in the block check if
+ * a couple of numbers divide it.
+ *
+ * @params
+ *      [in] start - The beginning of the range to check
+ *      [in] end - The end of the range to check
+ *      [in] warps - The number of warps per block to use
+ *
+ * @returns
+ *      unsigned long long - The number of primes in the range [start, end]
+ */
 int runCudaHybrid( ull start, ull end, unsigned int warps )
 {
     ull range = end-start+1;
     ull size = (range)*sizeof(int);
     ull threadsPer = warps*WARPSIZE;
     
+    //Make sure the call doesn't specify more threads in
+    //a block than allowed
     if(threadsPer > MAXTHREADS) threadsPer = MAXTHREADS;
 	cudaError_t lastError;
 	
+	//Allocate memory for result
     int* d_result;
 	if(cudaMalloc( &d_result, size )==cudaErrorMemoryAllocation)
 	{
 	    cout << "Error allocating memory on cuda device" << endl;
 	    return 0;
 	}
+	
+	//Set result to 0; non-primes will be set to 1
     cudaMemset(d_result, 0, size);
     
     ull blocks;
-    for(ull i=start, j=0; i<end; i+= MAXBLOCKS, j+=MAXBLOCKS)
+    //Need to run a total of 'range' blocks
+    //If that's more than 2^16, then this loop will
+    //run more than once
+    for(ull i=start, j=0; i<=end; i+= MAXBLOCKS, j+=MAXBLOCKS)
     {
         blocks = end-i+1;
         if(blocks > MAXBLOCKS) blocks = MAXBLOCKS;
         
-        //cout << "IsPrimeHybrid<<<" << blocks << ", " << threadsPer << ">>>(" << j << ", " << i << ", " << d_result << ")" << endl;
         isPrimeHybrid<<<blocks, threadsPer>>>( i, d_result+j);
     }
 
+    //Wait for all kernel calls to end
     cudaDeviceSynchronize();
+    
+    //Check if any kernels caused errors
     lastError = cudaPeekAtLastError();
     if(lastError != cudaSuccess)
     {
@@ -476,6 +562,8 @@ int runCudaHybrid( ull start, ull end, unsigned int warps )
 	    
         return 0;
     }
+    
+    //Get the number of primes
     int count = range-sumRange(d_result, range, warps);
     
     cudaFree( d_result );
