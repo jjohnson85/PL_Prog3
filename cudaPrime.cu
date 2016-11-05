@@ -46,7 +46,7 @@ __global__ void isPrimeCoarse( ull start, ull end, int* result )
         {
             //Otherwise, check if any number
             //up to n/2 divides n
-	        for( ull i = 2; i < val / 2; i++ )
+	        for( ull i = 2; i <= val / 2; i++ )
 	        {
 		        if( val % i == 0 )
 		        {
@@ -89,7 +89,7 @@ __global__ void isPrimeFine( ull val, ull offset, int * result )
     {
         if(tid == 2) prime = false;
     }
-    else if(tid < val/2)
+    else if(tid <= val/2)
     {
         //Check if the value the thread has divides val
         if(val % tid == 0)
@@ -147,7 +147,7 @@ __global__ void isPrimeHybrid( ull val_offset, int * result )
     {
         //Check multiples of blockDim offset by
         //the thread id to see if any divide the target
-        for(ull i=tid; i<lim; i+=blockDim.x)
+        for(ull i=tid; i<=lim; i+=blockDim.x)
         {
             if(val % i == 0) prime = false;
         }
@@ -542,12 +542,11 @@ int runCudaHybrid( ull start, ull end, unsigned int warps )
     //Need to run a total of 'range' blocks
     //If that's more than 2^16, then this loop will
     //run more than once
-    for(ull i=start, j=0; i<end; i+= MAXBLOCKS, j+=MAXBLOCKS)
+    for(ull i=start, j=0; i<=end; i+= MAXBLOCKS, j+=MAXBLOCKS)
     {
         blocks = end-i+1;
         if(blocks > MAXBLOCKS) blocks = MAXBLOCKS;
         
-        //cout << "IsPrimeHybrid<<<" << blocks << ", " << threadsPer << ">>>(" << j << ", " << i << ", " << d_result << ")" << endl;
         isPrimeHybrid<<<blocks, threadsPer>>>( i, d_result+j);
     }
 

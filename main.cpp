@@ -138,15 +138,15 @@ int main( int argc, char** argv )
 #endif
     
     //Parse the start and end arguments
-    unsigned long long start, end, inc, iter;
-    start = strtoull(argv[1], NULL, 10);
-    end = strtoull(argv[2], NULL, 10);
+    unsigned long long start=0, end=0, inc=0, iter=0;
+    start = max(strtoll(argv[1], NULL, 10), (long long)0);
+    end = max(strtoll(argv[2], NULL, 10), (long long)0);
     
     //Optionally parse iterations and increment
     if(argc > 3)
-        iter = strtoull(argv[3], NULL, 10);
+        iter = max(strtoll(argv[3], NULL, 10), (long long)0);
     if(argc > 4)
-        inc = strtoull(argv[4], NULL, 10);
+        inc = max(strtoll(argv[4], NULL, 10), (long long)0);
     
     //Output the data header
     cout << endl;
