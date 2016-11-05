@@ -68,7 +68,7 @@ bool isPrime( ull x )
 
     //Loop from 2-x/2
     bool isPrime = true;
-    for( ull i = 2; i < x / 2; i++ )
+    for( ull i = 2; i <= x / 2; i++ )
     {
         //Switch flag false if any number
         //Divides x

@@ -122,7 +122,11 @@ int main( int argc, char** argv )
     tests["Omp (Dynamic, 10)"] = bind(runOmpDynamic, _1, _2, 10);
     
     //Add the async function
-    //tests["std::Async"] = runAsync;
+    tests["Async (Batch Size 2)"] = bind(runAsync, _1, _2, 2);
+    tests["Async (Batch Size 4)"] = bind(runAsync, _1, _2, 4);
+    tests["Async (Batch Size 8)"] = bind(runAsync, _1, _2, 8);
+    tests["Async (Batch Size 16)"] = bind(runAsync, _1, _2, 16);
+    tests["Async (Batch Size 32)"] = bind(runAsync, _1, _2, 32);
     
 #ifdef _CUDA_PRIME
     //Add the cuda functions, all with 1, 16, and 32 warps

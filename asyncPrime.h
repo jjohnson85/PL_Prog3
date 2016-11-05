@@ -1,6 +1,7 @@
 #ifndef _ASYNCPRIME_H
 #define _ASYNCPRIME_H
+#include "functions.h"
 
-int runAsync( unsigned int start, unsigned int end );
+int runAsync( ull start, ull end, int batchSize );
 
 #endif
