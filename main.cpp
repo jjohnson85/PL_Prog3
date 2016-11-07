@@ -17,7 +17,10 @@
  *  * Omp (Dynamic, n) - Checks numbers in parallel using omp dynamic scheduling, assigning
  *      work in groups of n
  *  
- *  * std::Async - Uses the std::Async framework to check primality in parallel
+ *  * Async (Batch Size n) - Uses the std::Async framework to check primality in parallel.
+ *      Because of memory limitations, for large ranges it is not possible to create a
+ *      future object for each item in the range, so we limit ourselves to running only n
+ *      async operations at any given time.
  *  
  *  * Cuda : Fine Grained; n warp/block - Sequentially checks if each number is prime.
  *      For any number n being checked for primality, each CUDA thread checks if it is
@@ -38,14 +41,29 @@
  *      make cuda - Makes a version of the program which uses CUDA programming. Requires NVCC
  *      make nocuda - Makes a version of the program which does not use CUDA
  *      make - See make cuda
+ *
+ *      make cudaGraph and make nocudaGraph reformat the output to only a header and
+ *          the timing data, allowing for easy use with a graphing tool such as excel or gnuplot
  * 
  * Usage:
- *  ./primes start end [iterations] [increment]
+ *  ./primes start end [iterations] [increment] [-o] [-a] [-c]
  *      start, end - Defines the range to find primes in, inclusive
  *      iterations - The number of times to run the prime tests and average
  *          runtimes
  *      increment - Defines a step value to increase the range from start to end
  *          for producing graphable time data
+ *
+ *      By default, the program will only run a subset of the full test suite. The following
+ *      flags will run all defined tests for...
+ *          -o - OMP
+ *          -a - std::Async
+ *          -c - CUDA
+ *
+ *      The defualt algorithm subset includes
+ *          Sequential
+ *          CUDA : Hybrid, 16
+ *          OMP (Static, 10)
+ *          Async (Batch Size 32)
  *
  *  Examples:
  *      ./primes 0 10 - Finds the number of primes between 0 and 10
@@ -61,6 +79,7 @@
 #include <string>
 #include <functional>
 #include <cstdlib>
+#include <cctype>
 
 //Defines the name that the sequential function
 //Will be mapped to so it can be displayed first
@@ -79,6 +98,24 @@
 using namespace std;
 
 /*
+ * usage
+ *
+ * Outputs a usage message
+ */
+void usage()
+{
+        cout << "Usages: " << endl;
+        cout << "primes start end [iterations] [increment] [-o] [-a] [-c]\n\tFind the number of primes between start and end. If increment and iterations are given, the program will run through every multiple of increment between start and end the number of times defined by iterations and output the average timings" << endl;
+        cout << "Examples:\n\tprimes 0 1000 -- Find the number of primes between 0 and 1000\n\t" <<
+        "primes 0 1000 100 -- Find the number of primes between 0 and 1000, 100 times, and average the times taken\n\t" <<
+        "primes 0 1000 100 10 -- Find the number of primes between 0 and 10, then 0 and 20... up to 0 and 1000, doing each range 100 times and averaging the times" << endl;
+        cout <<  "By default, the program will only run a subset of the full test suite. The following" << 
+        " flags will run all defined tests for...\n" << 
+        "\t-o - OMP\n\t-a - std::Async\n\t-c - CUDA\n\n" << 
+        "The defualt algorithm subset includes\n\tSequential\n\tCUDA : Hybrid, 16\n\tOMP (Static, 10)\n\tAsync (Batch Size 32)" << endl;
+}
+
+/*
  * main
  *
  * Parses command line parameters and determines run mode.
@@ -91,20 +128,58 @@ using namespace std;
  *
  * Puts all of the parallel functions into a map of string -> function,
  * and passes that map to the function which does the correct run mode.
+ *
+ * @params
+ *      argc - Number of command line args
+ *      argv - Actual command line args
+ *
+ * @returns
+ *      0 - Successful run
+ *      1 - Invalid number of command line args
+ *      2 - Unparsable command line args
  */
 int main( int argc, char** argv )
 {
     //Make sure the command line arguements are
     //valid
-    if( argc < 3 || argc > 5 )
+    if( argc < 3 || argc > 8 )
     {
-        cout << "Usages: " << endl;
-        cout << "primes start end [iterations] [increment]\n\tFind the number of primes between start and end. If increment and iterations are given, the program will run through every multiple of increment between start and end the number of times defined by iterations and output the average timings" << endl;
-        cout << "Examples:\n\tprimes 0 1000 -- Find the number of primes between 0 and 1000\n\t" <<
-        "primes 0 1000 100 -- Find the number of primes between 0 and 1000, 100 times, and average the times taken\n\t" <<
-        "primes 0 1000 100 10 -- Find the number of primes between 0 and 10, then 0 and 20... up to 0 and 1000, doing each range 100 times and averaging the times" << endl;
-        return -1;
+        usage();
+        return 1;
     }
+    
+    //Parse the start and end arguments
+    int intsFound = 0;
+    vector<ull> values(4, 0);
+    map<char, bool> flags;
+    flags['c'] = flags['o'] = flags['a'] = false;
+    
+    for(int i=1; i<argc; i++)
+    {
+        //If arg starts with -, flag the chars after it true
+        if(argv[i][0] == '-')
+        {
+            string arg = argv[i];
+            for(int j=1; j<arg.size(); j++)
+            {
+                flags[tolower(arg[j])] = true;
+            }
+        }
+        else
+        {
+            //Otherwise, assume it's a number in the order defined
+            values[intsFound++] = (max(strtoll(argv[i], NULL, 10), (long long)0));
+        }
+    }
+    
+    if(intsFound > 4 || intsFound < 2)
+    {
+        usage();
+        return 2;
+    }
+    
+    //Rename the args for convenience
+    unsigned long long start=values[0], end=values[1], iter=values[2], inc=values[3];
     
     //Set up the map to pass to the timing functions
     map<string, primesFunction> tests;
@@ -116,41 +191,39 @@ int main( int argc, char** argv )
     tests[SEQUENTIAL_NAME] = runSequential;
     
     //Add the omp functions with 1 and 10 work items
-    tests["Omp (Static, 1)"] = bind(runOmpStatic, _1, _2, 1);
-    tests["Omp (Static, 10)"] = bind(runOmpStatic, _1, _2, 10);
-    tests["Omp (Dynamic, 1)"] = bind(runOmpDynamic, _1, _2, 1);
+    if(flags['o'])
+    {
+        tests["Omp (Static, 1)"] = bind(runOmpStatic, _1, _2, 1);
+        tests["Omp (Static, 10)"] = bind(runOmpStatic, _1, _2, 10);
+        tests["Omp (Dynamic, 1)"] = bind(runOmpDynamic, _1, _2, 1);
+    }
     tests["Omp (Dynamic, 10)"] = bind(runOmpDynamic, _1, _2, 10);
     
     //Add the async function
-    tests["Async (Batch Size 2)"] = bind(runAsync, _1, _2, 2);
-    tests["Async (Batch Size 4)"] = bind(runAsync, _1, _2, 4);
-    tests["Async (Batch Size 8)"] = bind(runAsync, _1, _2, 8);
-    tests["Async (Batch Size 16)"] = bind(runAsync, _1, _2, 16);
+    if(flags['a'])
+    {
+        tests["Async (Batch Size 4)"] = bind(runAsync, _1, _2, 4);
+        tests["Async (Batch Size 8)"] = bind(runAsync, _1, _2, 8);
+        tests["Async (Batch Size 16)"] = bind(runAsync, _1, _2, 16);
+    }
     tests["Async (Batch Size 32)"] = bind(runAsync, _1, _2, 32);
     
 #ifdef _CUDA_PRIME
     //Add the cuda functions, all with 1, 16, and 32 warps
-    tests["Cuda - Coarse: 1 warp"] = bind(runCudaCoarse, _1, _2, 1);
-    tests["Cuda - Fine: 1 warp"] = bind(runCudaFine, _1, _2, 1);
-    tests["Cuda - Hybrid: 1 warp"] = bind(runCudaHybrid, _1, _2, 1);
-    tests["Cuda - Coarse: 16 warps"] = bind(runCudaCoarse, _1, _2, 16);
-    tests["Cuda - Fine: 16 warps"] = bind(runCudaFine, _1, _2, 16);
+    if(flags['c'])
+    {
+        tests["Cuda - Coarse: 1 warp"] = bind(runCudaCoarse, _1, _2, 1);
+        tests["Cuda - Fine: 1 warp"] = bind(runCudaFine, _1, _2, 1);
+        tests["Cuda - Hybrid: 1 warp"] = bind(runCudaHybrid, _1, _2, 1);
+        tests["Cuda - Coarse: 16 warps"] = bind(runCudaCoarse, _1, _2, 16);
+        tests["Cuda - Fine: 16 warps"] = bind(runCudaFine, _1, _2, 16);
+        tests["Cuda - Coarse: 32 warps"] = bind(runCudaCoarse, _1, _2, 32);
+        tests["Cuda - Fine: 32 warps"] = bind(runCudaFine, _1, _2, 32);
+        tests["Cuda - Hybrid: 32 warps"] = bind(runCudaHybrid, _1, _2, 32);
+    }
     tests["Cuda - Hybrid: 16 warps"] = bind(runCudaHybrid, _1, _2, 16);
-    tests["Cuda - Coarse: 32 warps"] = bind(runCudaCoarse, _1, _2, 32);
-    tests["Cuda - Fine: 32 warps"] = bind(runCudaFine, _1, _2, 32);
-    tests["Cuda - Hybrid: 32 warps"] = bind(runCudaHybrid, _1, _2, 32);
 #endif
     
-    //Parse the start and end arguments
-    unsigned long long start=0, end=0, inc=0, iter=0;
-    start = max(strtoll(argv[1], NULL, 10), (long long)0);
-    end = max(strtoll(argv[2], NULL, 10), (long long)0);
-    
-    //Optionally parse iterations and increment
-    if(argc > 3)
-        iter = max(strtoll(argv[3], NULL, 10), (long long)0);
-    if(argc > 4)
-        inc = max(strtoll(argv[4], NULL, 10), (long long)0);
     
     //Output the data header
     cout << endl;
@@ -165,6 +238,12 @@ int main( int argc, char** argv )
         if(i.first != SEQUENTIAL_NAME)
             cout << "\"" << i.first << "\" ";
     cout << endl;
+#else
+    cout << "Primes in the range [" << start << ", " << end << "]. Range of " << end-start+1 << " integers" << endl;
+    if(intsFound > 2)
+        cout << iter << " iterations" << endl;
+    if(intsFound > 3)
+        cout << "Range increases by " << inc << endl;
 #endif
 
     //Maps to store the times recorded and numbers
@@ -173,20 +252,20 @@ int main( int argc, char** argv )
     map<string, ull> primes;
     
     //If 3 args, run each test 1 time
-    if(argc == 3)
+    if(intsFound == 2)
     {
         getPrimeTimings(tests, start, end, times, primes);
         outputData(cout, tests, times, primes);
     }
     //If 4 args, run each test 'iter' times (arg #3)
-    else if(argc == 4)
+    else if(intsFound == 3)
     {
         getTimeAvg(tests, start, end, iter, times, primes);
         outputData(cout, tests, times, primes);
     }
     //Otherwise, run tests from start->start+n*increment up to start->end
     //To get timings over a range of range sizses
-    else
+    else if(intsFound == 4)
     {
         for(ull i=start; i<=end; i+= inc)
         {

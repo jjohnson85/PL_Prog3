@@ -15,11 +15,10 @@
  * @params
  *      [in] start - The start of the range to find primes in
  *      [in] end - The end of the range to find primes in
- *	[in] batchSize - size of async thred batches
- *      [out] primes - The number of primes the function finds
+ *	    [in] batchSize - size of async thred batches
  *
  * @returns
- *      double - The time the function took in seconds
+ *      int - The number of primes in the range [start, end]
  */
 int runAsync( ull start, ull end, int batchSize  )
 {
@@ -56,7 +55,3 @@ int runAsync( ull start, ull end, int batchSize  )
 
     return primes;
 }
-
-
-
-

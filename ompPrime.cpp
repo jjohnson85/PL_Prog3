@@ -35,7 +35,7 @@ int runOmpStatic( ull start, ull end, ull work )
     //Uses static scheduling with 'work' sized groups
     //Add reduction on 'total' allows thread-safe summing
     //Of results
-#   pragma omp parallel for num_threads(omp_get_num_procs()) schedule(dynamic, work) \
+#   pragma omp parallel for num_threads(omp_get_num_procs()) schedule(static, work) \
     reduction(+ : total)
     for(ull i = start; i <= end; i++)
     {
