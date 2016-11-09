@@ -1,1 +1,0 @@
-plot for [i=2:19+1] 'graph.dat' u 1:i w lp title columnheader(i)

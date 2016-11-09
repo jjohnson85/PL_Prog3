@@ -1,7 +1,6 @@
 
 #include<iostream>
-
-typedef unsigned long long ull;
+#include "functions.h"
 
 int runCudaCoarse( ull start, ull end, unsigned int warps );
 int runCudaFine( ull start, ull end, unsigned int warps );
