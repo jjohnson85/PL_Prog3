@@ -1,9 +1,3 @@
-
-Prime benchmark, run Sat Nov  5 16:30:00 2016
-
-CPU: 8 hardware threads
-GPGPU: GeForce GTX 960, CUDA 5.2, 4095 Mbytes global memory, 1024 CUDA cores
-
 "Range" "Sequential" "Async (Batch Size 16)" "Async (Batch Size 2)" "Async (Batch Size 32)" "Async (Batch Size 4)" "Async (Batch Size 8)" "Cuda - Coarse: 1 warp" "Cuda - Coarse: 16 warps" "Cuda - Coarse: 32 warps" "Cuda - Fine: 1 warp" "Cuda - Fine: 16 warps" "Cuda - Fine: 32 warps" "Cuda - Hybrid: 1 warp" "Cuda - Hybrid: 16 warps" "Cuda - Hybrid: 32 warps" "Omp (Dynamic, 1)" "Omp (Dynamic, 10)" "Omp (Static, 1)" "Omp (Static, 10)" 
 0    0.0000001557    0.0000351684    0.0000309117    0.0000255629    0.0000238701    0.0000233935    0.0065803892    0.0001641159    0.0001620288    0.0001629614    0.0001620851    0.0001622928    0.0001612379    0.0001562563    0.0001517809    0.0002495157    0.0000024892    0.0000020754    0.0000018454 
 100    0.0000269348    0.0034585532    0.0007606630    0.0029892941    0.0006001650    0.0022972970    0.0002836960    0.0001911496    0.0001825348    0.0005111972    0.0005049219    0.0005095471    0.0001515009    0.0001531279    0.0001566976    0.0004338603    0.0008442280    0.0004618780    0.0005942019 
